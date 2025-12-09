@@ -30,6 +30,7 @@ async def add_destination_start(update: Update, context: ContextTypes.DEFAULT_TY
         "➕ افزودن مقصد جدید:\n\n"
         "لطفاً Chat ID کانال یا گروه مقصد را ارسال کنید:\n"
         "(مثال: -1001234567890)\n\n"
+        "⚠️ توجه: ربات باید در کانال/گروه Admin باشد!\n\n"
         "برای لغو روی دکمه لغو بزنید.",
         reply_markup=cancel_keyboard()
     )
@@ -47,15 +48,34 @@ async def receive_destination(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return WAITING_DESTINATION
     
-    if db.add_destination(chat_id):
+    # بررسی دسترسی ربات به کانال
+    try:
+        chat = await context.bot.get_chat(chat_id)
+        chat_name = chat.title if chat.title else "بدون نام"
+        
+        if db.add_destination(chat_id):
+            await update.message.reply_text(
+                f"✅ مقصد با موفقیت اضافه شد:\n\n"
+                f"📌 نام: {chat_name}\n"
+                f"🆔 Chat ID: `{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=destination_menu_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ این مقصد قبلاً اضافه شده است!",
+                reply_markup=destination_menu_keyboard()
+            )
+    except Exception as e:
         await update.message.reply_text(
-            f"✅ مقصد با Chat ID زیر با موفقیت اضافه شد:\n`{chat_id}`",
+            f"❌ خطا در دسترسی به کانال!\n\n"
+            f"احتمالاً:\n"
+            f"• ربات Admin نیست\n"
+            f"• Chat ID اشتباه است\n"
+            f"• کانال خصوصی است\n\n"
+            f"Chat ID: `{chat_id}`\n"
+            f"خطا: {str(e)[:100]}",
             parse_mode='Markdown',
-            reply_markup=destination_menu_keyboard()
-        )
-    else:
-        await update.message.reply_text(
-            "❌ این مقصد قبلاً اضافه شده است!",
             reply_markup=destination_menu_keyboard()
         )
     
@@ -64,24 +84,36 @@ async def receive_destination(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def list_destinations(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست مقاصد"""
     destinations = db.get_destinations()
-    if destinations:
-        text = "📜 لیست مقاصد:\n\n"
-        
-        for idx, dest in enumerate(destinations, 1):
-            # دریافت اطلاعات کانال
-            try:
-                chat = await context.bot.get_chat(dest)
-                chat_name = chat.title if chat.title else f"کانال {idx}"
-                chat_link = f"https://t.me/{chat.username}" if chat.username else None
-                
-                if chat_link:
-                    text += f"{idx}. [{chat_name}]({chat_link})\n"
-                else:
-                    text += f"{idx}. {chat_name}\n"
-            except:
-                text += f"{idx}. `{dest}`\n"
-    else:
-        text = "❌ هیچ مقصدی تعریف نشده است!"
+    
+    if not destinations:
+        await update.message.reply_text(
+            "❌ هیچ مقصدی تعریف نشده است!\n\n"
+            "برای افزودن مقصد، روی دکمه «➕ افزودن مقصد» بزنید.",
+            reply_markup=destination_menu_keyboard()
+        )
+        return
+    
+    text = "📜 لیست مقاصد:\n\n"
+    
+    for idx, dest in enumerate(destinations, 1):
+        try:
+            chat = await context.bot.get_chat(dest)
+            chat_name = chat.title if chat.title else "بدون نام"
+            chat_username = chat.username if hasattr(chat, 'username') and chat.username else None
+            
+            if chat_username:
+                # اگه یوزرنیم داره، لینک بده
+                text += f"{idx}. [{chat_name}](https://t.me/{chat_username})\n"
+                text += f"   🆔 `{dest}`\n\n"
+            else:
+                # اگه یوزرنیم نداره، فقط اسم و آیدی
+                text += f"{idx}. **{chat_name}**\n"
+                text += f"   🆔 `{dest}`\n\n"
+        except Exception as e:
+            # اگه دسترسی نداره، فقط Chat ID نشون بده
+            text += f"{idx}. ⚠️ دسترسی ندارد\n"
+            text += f"   🆔 `{dest}`\n"
+            text += f"   (ربات احتماً Admin نیست)\n\n"
     
     await update.message.reply_text(
         text,
@@ -93,39 +125,61 @@ async def list_destinations(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def remove_destination_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع حذف مقصد"""
     destinations = db.get_destinations()
-    if destinations:
-        text = "➖ حذف مقصد:\n\n"
-        text += "لیست مقاصد:\n"
-        for idx, dest in enumerate(destinations, 1):
-            text += f"{idx}. `{dest}`\n"
-        text += "\nChat ID مقصدی که می‌خواهید حذف کنید را ارسال کنید:"
-        
-        await update.message.reply_text(
-            text,
-            parse_mode='Markdown',
-            reply_markup=cancel_keyboard()
-        )
-        return WAITING_DESTINATION_REMOVE
-    else:
+    
+    if not destinations:
         await update.message.reply_text(
             "❌ هیچ مقصدی برای حذف وجود ندارد!",
             reply_markup=destination_menu_keyboard()
         )
         return ConversationHandler.END
+    
+    text = "➖ حذف مقصد:\n\n"
+    text += "📋 لیست مقاصد:\n\n"
+    
+    for idx, dest in enumerate(destinations, 1):
+        try:
+            chat = await context.bot.get_chat(dest)
+            chat_name = chat.title if chat.title else "بدون نام"
+            text += f"{idx}. {chat_name}\n"
+            text += f"   🆔 `{dest}`\n\n"
+        except:
+            text += f"{idx}. 🆔 `{dest}`\n\n"
+    
+    text += "💬 Chat ID مقصدی که می‌خواهید حذف کنید را ارسال کنید:"
+    
+    await update.message.reply_text(
+        text,
+        parse_mode='Markdown',
+        reply_markup=cancel_keyboard()
+    )
+    return WAITING_DESTINATION_REMOVE
 
 async def receive_destination_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت Chat ID مقصد برای حذف"""
     chat_id = update.message.text.strip()
     
     if db.remove_destination(chat_id):
-        await update.message.reply_text(
-            f"✅ مقصد با Chat ID زیر حذف شد:\n`{chat_id}`",
-            parse_mode='Markdown',
-            reply_markup=destination_menu_keyboard()
-        )
+        try:
+            chat = await context.bot.get_chat(chat_id)
+            chat_name = chat.title if chat.title else "بدون نام"
+            await update.message.reply_text(
+                f"✅ مقصد حذف شد:\n\n"
+                f"📌 نام: {chat_name}\n"
+                f"🆔 Chat ID: `{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=destination_menu_keyboard()
+            )
+        except:
+            await update.message.reply_text(
+                f"✅ مقصد با Chat ID زیر حذف شد:\n`{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=destination_menu_keyboard()
+            )
     else:
         await update.message.reply_text(
-            "❌ این مقصد یافت نشد!",
+            f"❌ این مقصد یافت نشد!\n\n"
+            f"Chat ID وارد شده: `{chat_id}`",
+            parse_mode='Markdown',
             reply_markup=destination_menu_keyboard()
         )
     
@@ -133,10 +187,9 @@ async def receive_destination_remove(update: Update, context: ContextTypes.DEFAU
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو عملیات"""
-    from app.handlers.forwarding import is_forwarding
     await update.message.reply_text(
         "❌ عملیات لغو شد.",
-        reply_markup=main_menu_keyboard(is_forwarding=is_forwarding)
+        reply_markup=main_menu_keyboard()
     )
     return ConversationHandler.END
 

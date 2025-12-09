@@ -30,6 +30,7 @@ async def add_source_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "➕ افزودن مبدا جدید:\n\n"
         "لطفاً Chat ID کانال یا گروه مبدا را ارسال کنید:\n"
         "(مثال: -1001234567890)\n\n"
+        "⚠️ توجه: ربات باید در کانال/گروه عضو باشد!\n\n"
         "برای لغو روی دکمه لغو بزنید.",
         reply_markup=cancel_keyboard()
     )
@@ -47,15 +48,34 @@ async def receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return WAITING_SOURCE
     
-    if db.add_source(chat_id):
+    # بررسی دسترسی ربات به کانال
+    try:
+        chat = await context.bot.get_chat(chat_id)
+        chat_name = chat.title if chat.title else "بدون نام"
+        
+        if db.add_source(chat_id):
+            await update.message.reply_text(
+                f"✅ مبدا با موفقیت اضافه شد:\n\n"
+                f"📌 نام: {chat_name}\n"
+                f"🆔 Chat ID: `{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=source_menu_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ این مبدا قبلاً اضافه شده است!",
+                reply_markup=source_menu_keyboard()
+            )
+    except Exception as e:
         await update.message.reply_text(
-            f"✅ مبدا با Chat ID زیر با موفقیت اضافه شد:\n`{chat_id}`",
+            f"❌ خطا در دسترسی به کانال!\n\n"
+            f"احتمالاً:\n"
+            f"• ربات عضو کانال نیست\n"
+            f"• Chat ID اشتباه است\n"
+            f"• کانال خصوصی است\n\n"
+            f"Chat ID: `{chat_id}`\n"
+            f"خطا: {str(e)[:100]}",
             parse_mode='Markdown',
-            reply_markup=source_menu_keyboard()
-        )
-    else:
-        await update.message.reply_text(
-            "❌ این مبدا قبلاً اضافه شده است!",
             reply_markup=source_menu_keyboard()
         )
     
@@ -64,24 +84,36 @@ async def receive_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def list_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست مبداها"""
     sources = db.get_sources()
-    if sources:
-        text = "📜 لیست مبداها:\n\n"
-        
-        for idx, source in enumerate(sources, 1):
-            # دریافت اطلاعات کانال
-            try:
-                chat = await context.bot.get_chat(source)
-                chat_name = chat.title if chat.title else f"کانال {idx}"
-                chat_link = f"https://t.me/{chat.username}" if chat.username else None
-                
-                if chat_link:
-                    text += f"{idx}. [{chat_name}]({chat_link})\n"
-                else:
-                    text += f"{idx}. {chat_name}\n"
-            except:
-                text += f"{idx}. `{source}`\n"
-    else:
-        text = "❌ هیچ مبدایی تعریف نشده است!"
+    
+    if not sources:
+        await update.message.reply_text(
+            "❌ هیچ مبدایی تعریف نشده است!\n\n"
+            "برای افزودن مبدا، روی دکمه «➕ افزودن مبدا» بزنید.",
+            reply_markup=source_menu_keyboard()
+        )
+        return
+    
+    text = "📜 لیست مبداها:\n\n"
+    
+    for idx, source in enumerate(sources, 1):
+        try:
+            chat = await context.bot.get_chat(source)
+            chat_name = chat.title if chat.title else "بدون نام"
+            chat_username = chat.username if hasattr(chat, 'username') and chat.username else None
+            
+            if chat_username:
+                # اگه یوزرنیم داره، لینک بده
+                text += f"{idx}. [{chat_name}](https://t.me/{chat_username})\n"
+                text += f"   🆔 `{source}`\n\n"
+            else:
+                # اگه یوزرنیم نداره، فقط اسم و آیدی
+                text += f"{idx}. **{chat_name}**\n"
+                text += f"   🆔 `{source}`\n\n"
+        except Exception as e:
+            # اگه دسترسی نداره، فقط Chat ID نشون بده
+            text += f"{idx}. ⚠️ دسترسی ندارد\n"
+            text += f"   🆔 `{source}`\n"
+            text += f"   (ربات احتماً عضو کانال نیست)\n\n"
     
     await update.message.reply_text(
         text,
@@ -93,39 +125,61 @@ async def list_sources(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def remove_source_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع حذف مبدا"""
     sources = db.get_sources()
-    if sources:
-        text = "➖ حذف مبدا:\n\n"
-        text += "لیست مبداها:\n"
-        for idx, source in enumerate(sources, 1):
-            text += f"{idx}. `{source}`\n"
-        text += "\nChat ID مبدایی که می‌خواهید حذف کنید را ارسال کنید:"
-        
-        await update.message.reply_text(
-            text,
-            parse_mode='Markdown',
-            reply_markup=cancel_keyboard()
-        )
-        return WAITING_SOURCE_REMOVE
-    else:
+    
+    if not sources:
         await update.message.reply_text(
             "❌ هیچ مبدایی برای حذف وجود ندارد!",
             reply_markup=source_menu_keyboard()
         )
         return ConversationHandler.END
+    
+    text = "➖ حذف مبدا:\n\n"
+    text += "📋 لیست مبداها:\n\n"
+    
+    for idx, source in enumerate(sources, 1):
+        try:
+            chat = await context.bot.get_chat(source)
+            chat_name = chat.title if chat.title else "بدون نام"
+            text += f"{idx}. {chat_name}\n"
+            text += f"   🆔 `{source}`\n\n"
+        except:
+            text += f"{idx}. 🆔 `{source}`\n\n"
+    
+    text += "💬 Chat ID مبدایی که می‌خواهید حذف کنید را ارسال کنید:"
+    
+    await update.message.reply_text(
+        text,
+        parse_mode='Markdown',
+        reply_markup=cancel_keyboard()
+    )
+    return WAITING_SOURCE_REMOVE
 
 async def receive_source_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت Chat ID مبدا برای حذف"""
     chat_id = update.message.text.strip()
     
     if db.remove_source(chat_id):
-        await update.message.reply_text(
-            f"✅ مبدا با Chat ID زیر حذف شد:\n`{chat_id}`",
-            parse_mode='Markdown',
-            reply_markup=source_menu_keyboard()
-        )
+        try:
+            chat = await context.bot.get_chat(chat_id)
+            chat_name = chat.title if chat.title else "بدون نام"
+            await update.message.reply_text(
+                f"✅ مبدا حذف شد:\n\n"
+                f"📌 نام: {chat_name}\n"
+                f"🆔 Chat ID: `{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=source_menu_keyboard()
+            )
+        except:
+            await update.message.reply_text(
+                f"✅ مبدا با Chat ID زیر حذف شد:\n`{chat_id}`",
+                parse_mode='Markdown',
+                reply_markup=source_menu_keyboard()
+            )
     else:
         await update.message.reply_text(
-            "❌ این مبدا یافت نشد!",
+            f"❌ این مبدا یافت نشد!\n\n"
+            f"Chat ID وارد شده: `{chat_id}`",
+            parse_mode='Markdown',
             reply_markup=source_menu_keyboard()
         )
     
@@ -133,10 +187,9 @@ async def receive_source_remove(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو عملیات"""
-    from app.handlers.forwarding import is_forwarding
     await update.message.reply_text(
         "❌ عملیات لغو شد.",
-        reply_markup=main_menu_keyboard(is_forwarding=is_forwarding)
+        reply_markup=main_menu_keyboard()
     )
     return ConversationHandler.END
 
