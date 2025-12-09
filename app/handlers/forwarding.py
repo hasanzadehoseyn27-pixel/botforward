@@ -145,20 +145,56 @@ async def handle_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = update.channel_post
     chat_id = str(message.chat_id)
     
+    # بررسی اینکه کانال جزو مبداها هست یا نه
     sources = db.get_sources()
     if chat_id not in sources:
         return
     
+    # اگه پیام متنی داره
     if message.text:
         ad_number = extract_ad_number(message.text)
         
         if ad_number:
+            # پیام با شماره آگهی
             message_link = f"https://t.me/c/{chat_id.replace('-100', '')}/{message.message_id}"
             
             if db.add_post(ad_number, chat_id, message.message_id, message_link):
-                print(f"✅ پست جدید ذخیره شد: آگهی #{ad_number}")
+                print(f"✅ پست با شماره آگهی ذخیره شد: آگهی #{ad_number}")
             else:
                 print(f"⚠️ پست تکراری: آگهی #{ad_number}")
+        else:
+            # پیام بدون شماره آگهی - از message_id به عنوان شماره یکتا استفاده کن
+            ad_number = f"msg_{message.message_id}"
+            message_link = f"https://t.me/c/{chat_id.replace('-100', '')}/{message.message_id}"
+            
+            if db.add_post(ad_number, chat_id, message.message_id, message_link):
+                print(f"✅ پست بدون شماره آگهی ذخیره شد: {ad_number}")
+            else:
+                print(f"⚠️ پست تکراری: {ad_number}")
+    
+    # اگه پیام عکس/ویدیو/فایل و... داره (بدون متن یا با کپشن)
+    elif message.caption:
+        ad_number = extract_ad_number(message.caption)
+        
+        if ad_number:
+            message_link = f"https://t.me/c/{chat_id.replace('-100', '')}/{message.message_id}"
+            if db.add_post(ad_number, chat_id, message.message_id, message_link):
+                print(f"✅ پست با کپشن ذخیره شد: آگهی #{ad_number}")
+            else:
+                print(f"⚠️ پست تکراری: آگهی #{ad_number}")
+        else:
+            ad_number = f"msg_{message.message_id}"
+            message_link = f"https://t.me/c/{chat_id.replace('-100', '')}/{message.message_id}"
+            if db.add_post(ad_number, chat_id, message.message_id, message_link):
+                print(f"✅ پست با کپشن (بدون شماره) ذخیره شد: {ad_number}")
+    
+    else:
+        # پیام بدون متن و کپشن (مثلاً فقط عکس)
+        ad_number = f"msg_{message.message_id}"
+        message_link = f"https://t.me/c/{chat_id.replace('-100', '')}/{message.message_id}"
+        
+        if db.add_post(ad_number, chat_id, message.message_id, message_link):
+            print(f"✅ پیام بدون متن ذخیره شد: {ad_number}")
 
 # Handler برای channel posts
 channel_post_handler = MessageHandler(filters.UpdateType.CHANNEL_POST, handle_channel_post)

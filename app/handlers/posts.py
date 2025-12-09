@@ -24,16 +24,46 @@ async def active_posts(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=posts_menu_keyboard()
         )
         
-        for ad_num, link, _, _ in posts:
-            text = f"🔖 شماره آگهی #{ad_num}"
-            if link:
-                text = f"[{text}]({link})"
-            
-            await update.message.reply_text(
-                text,
-                parse_mode='Markdown',
-                reply_markup=post_toggle_button(ad_num, True)
-            )
+        for ad_num, link, source_chat_id, message_id in posts:
+            # بررسی اینکه آیا شماره آگهی داره یا فقط message_id هست
+            if ad_num.startswith("msg_"):
+                # پیام بدون شماره آگهی - محتوای پیام رو بگیر
+                try:
+                    message = await context.bot.forward_message(
+                        chat_id=update.effective_chat.id,
+                        from_chat_id=source_chat_id,
+                        message_id=message_id
+                    )
+                    
+                    # بعد از فوروارد، دکمه toggle رو بفرست
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text="⬆️ این پیام فعال است",
+                        reply_markup=post_toggle_button(ad_num, True)
+                    )
+                except Exception as e:
+                    # اگه نتونست فوروارد کنه، فقط لینک بده
+                    if link:
+                        text = f"[📄 پیام #{ad_num.replace('msg_', '')}]({link})"
+                    else:
+                        text = f"📄 پیام #{ad_num.replace('msg_', '')}"
+                    
+                    await update.message.reply_text(
+                        text,
+                        parse_mode='Markdown',
+                        reply_markup=post_toggle_button(ad_num, True)
+                    )
+            else:
+                # پیام با شماره آگهی - مثل قبل نمایش بده
+                text = f"🔖 شماره آگهی #{ad_num}"
+                if link:
+                    text = f"[{text}]({link})"
+                
+                await update.message.reply_text(
+                    text,
+                    parse_mode='Markdown',
+                    reply_markup=post_toggle_button(ad_num, True)
+                )
     else:
         await update.message.reply_text(
             "❌ هیچ پست فعالی وجود ندارد!",
@@ -51,9 +81,18 @@ async def inactive_posts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         for ad_num, link in posts:
-            text = f"🔖 شماره آگهی #{ad_num}"
-            if link:
-                text = f"[{text}]({link})"
+            # بررسی اینکه آیا شماره آگهی داره یا نه
+            if ad_num.startswith("msg_"):
+                # پیام بدون شماره آگهی
+                if link:
+                    text = f"[📄 پیام #{ad_num.replace('msg_', '')}]({link})"
+                else:
+                    text = f"📄 پیام #{ad_num.replace('msg_', '')}"
+            else:
+                # پیام با شماره آگهی
+                text = f"🔖 شماره آگهی #{ad_num}"
+                if link:
+                    text = f"[{text}]({link})"
             
             await update.message.reply_text(
                 text,
@@ -73,13 +112,18 @@ async def toggle_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = query.data
     parts = data.split("_")
-    ad_number = parts[2]
+    
+    # اگه شماره پیام باشه (msg_12345)
+    if parts[1] == "msg":
+        ad_number = f"msg_{parts[2]}"
+    else:
+        ad_number = parts[2]
     
     new_status = db.toggle_post(ad_number)
     
     if new_status is not None:
         status_text = "✅ روشن" if new_status == 1 else "❌ خاموش"
-        await query.answer(f"وضعیت پست به {status_text} تغییر کرد!", show_alert=True)
+        await query.answer(f"وضعیت پیام به {status_text} تغییر کرد!", show_alert=True)
         await query.edit_message_reply_markup(
             reply_markup=post_toggle_button(ad_number, new_status)
         )
