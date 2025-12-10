@@ -2,9 +2,9 @@ import asyncio
 import sys
 sys.path.append('app')
 
-from config import BOT_TOKEN, SUPER_ADMIN_ID
-from database.db import Database  # ✅ درست
-from bot import create_bot
+from config import SUPER_ADMIN_ID
+from database.db import Database
+
 
 def main():
     print("✅ شروع راه‌اندازی ربات...")
@@ -19,18 +19,10 @@ def main():
     else:
         print(f"✅ SUPER ADMIN با ID {SUPER_ADMIN_ID} قبلاً موجود است!")
     
-    # ساخت و اجرای ربات
-    print("⏳ در حال ساخت Application...")
-    application = create_bot(BOT_TOKEN)
-    print("✅ Application ساخته شد!")
-    
-    print("⏳ در حال اضافه کردن Handler ها...")
-    from handlers import setup_handlers
-    setup_handlers(application)
-    print("✅ تمام Handler ها اضافه شدند!")
-    
-    print("🤖 ربات در حال اجرا...")
-    application.run_polling(drop_pending_updates=True)
+    # اجرای ربات از bot.py
+    from app.bot import main as bot_main
+    bot_main()
+
 
 if __name__ == "__main__":
     try:
