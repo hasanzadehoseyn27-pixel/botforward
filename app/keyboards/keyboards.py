@@ -1,7 +1,9 @@
 # app/keyboards/keyboards.py
 from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
+from config import SUPER_ADMIN_ID
 
-def main_menu_keyboard(is_forwarding=False):
+
+def main_menu_keyboard(is_forwarding=False, user_id=None):
     """منوی اصلی با دکمه‌های پایین صفحه"""
     keyboard = [
         [
@@ -11,13 +13,15 @@ def main_menu_keyboard(is_forwarding=False):
         [
             KeyboardButton("📋 لیست پست‌ها"),
             KeyboardButton("⏰ حالت ارسال")
-        ],
-        [
-            KeyboardButton("👑 پنل مدیریت")
         ]
     ]
     
+    # 🔥 دکمه پنل مدیریت فقط برای SUPER_ADMIN
+    if user_id and str(user_id) == str(SUPER_ADMIN_ID):
+        keyboard.append([KeyboardButton("👑 پنل مدیریت")])
+    
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 
 def admin_panel_keyboard():
     """منوی پنل مدیریت"""
@@ -36,6 +40,7 @@ def admin_panel_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
 def source_menu_keyboard():
     """منوی مدیریت مبداها"""
     keyboard = [
@@ -50,6 +55,7 @@ def source_menu_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
 def destination_menu_keyboard():
     """منوی مدیریت مقاصد"""
     keyboard = [
@@ -63,6 +69,7 @@ def destination_menu_keyboard():
         ]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 
 def send_mode_menu_keyboard(is_forwarding=False):
     """منوی حالت ارسال"""
@@ -91,6 +98,7 @@ def send_mode_menu_keyboard(is_forwarding=False):
     
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
 def posts_menu_keyboard():
     """منوی لیست پست‌ها"""
     keyboard = [
@@ -104,12 +112,14 @@ def posts_menu_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
 def cancel_keyboard():
     """دکمه لغو"""
     keyboard = [
         [KeyboardButton("❌ لغو")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 
 def post_toggle_button(ad_number, is_active):
     """دکمه روشن/خاموش برای هر پست (Inline)"""

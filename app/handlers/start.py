@@ -4,7 +4,9 @@ from telegram.ext import CommandHandler, ContextTypes
 from app.keyboards.keyboards import main_menu_keyboard
 from app.database import Database
 
+
 db = Database()
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دستور /start"""
@@ -27,8 +29,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"سلام {user.first_name}! 👋\n\n"
         "به ربات فوروارد خودکار خوش اومدی! 🚀\n"
         "از منوی زیر گزینه مورد نظرت رو انتخاب کن:",
-        reply_markup=main_menu_keyboard()
+        reply_markup=main_menu_keyboard(user_id=user_id)  # 🔥 ارسال user_id
     )
+
 
 # ایجاد handler
 start_handler = CommandHandler("start", start)

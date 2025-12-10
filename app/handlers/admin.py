@@ -21,10 +21,15 @@ WAITING_ADMIN_ID = 0
 WAITING_ADMIN_REMOVE = 1
 
 
+def is_super_admin(user_id: int) -> bool:
+    """بررسی SUPER_ADMIN بودن کاربر"""
+    return str(user_id) == str(SUPER_ADMIN_ID)
+
+
 async def is_admin(user_id: int) -> bool:
     """بررسی ادمین بودن کاربر"""
     # 🔥 اول چک کن که SUPER_ADMIN هست یا نه
-    if str(user_id) == str(SUPER_ADMIN_ID):
+    if is_super_admin(user_id):
         # اگر تو دیتابیس نیست، اضافه‌اش کن
         if not db.is_admin(str(user_id)):
             db.add_admin(str(user_id), username="SUPER_ADMIN", first_name="Super Admin")
@@ -78,13 +83,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """پنل مدیریت"""
+    """پنل مدیریت - فقط برای SUPER_ADMIN"""
     user_id = update.effective_user.id
     
-    # بررسی ادمین بودن
-    if not await is_admin(user_id):
+    # 🔥 فقط SUPER_ADMIN می‌تونه وارد پنل مدیریت بشه
+    if not is_super_admin(user_id):
         await update.message.reply_text(
-            "❌ شما دسترسی به پنل مدیریت ندارید!",
+            "❌ شما دسترسی به پنل مدیریت ندارید!\n"
+            "فقط SUPER ADMIN می‌تواند وارد این بخش شود.",
             reply_markup=main_menu_keyboard()
         )
         return
@@ -97,12 +103,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع افزودن ادمین"""
+    """شروع افزودن ادمین - فقط برای SUPER_ADMIN"""
     user_id = update.effective_user.id
     
-    if not await is_admin(user_id):
+    # 🔥 فقط SUPER_ADMIN می‌تونه ادمین اضافه کنه
+    if not is_super_admin(user_id):
         await update.message.reply_text(
-            "❌ شما دسترسی به این بخش ندارید!",
+            "❌ شما دسترسی به این بخش ندارید!\n"
+            "فقط SUPER ADMIN می‌تواند ادمین اضافه کند.",
             reply_markup=main_menu_keyboard()
         )
         return ConversationHandler.END
@@ -133,14 +141,17 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # دریافت اطلاعات کاربر
     try:
         user = await context.bot.get_chat(admin_id)
-        username = user.username if hasattr(user, 'username') and user.username else "بدون یوزرنیم"
-        first_name = user.first_name if user.first_name else "بدون نام"
+        username = user.username if hasattr(user, 'username') and user.username else None
+        first_name = user.first_name if user.first_name else None
         
         if db.add_admin(admin_id, username, first_name):
+            user_tag = f"@{username}" if username else "بدون یوزرنیم"
+            name = first_name if first_name else "بدون نام"
+            
             await update.message.reply_text(
                 f"✅ ادمین با موفقیت اضافه شد:\n\n"
-                f"👤 نام: {first_name}\n"
-                f"🆔 یوزرنیم: @{username}\n"
+                f"👤 نام: {name}\n"
+                f"🆔 یوزرنیم: {user_tag}\n"
                 f"🔢 User ID: `{admin_id}`",
                 parse_mode='Markdown',
                 reply_markup=admin_panel_keyboard()
@@ -151,25 +162,34 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=admin_panel_keyboard()
             )
     except Exception as e:
-        await update.message.reply_text(
-            f"⚠️ هشدار: ادمین اضافه شد اما اطلاعات کاربر قابل دسترسی نیست.\n\n"
-            f"User ID: `{admin_id}`\n\n"
-            f"کاربر باید حداقل یکبار ربات را /start کرده باشد.",
-            parse_mode='Markdown',
-            reply_markup=admin_panel_keyboard()
-        )
-        db.add_admin(admin_id, None, None)
+        # اگه اطلاعات کاربر قابل دسترسی نیست، بازم اضافه کن
+        if db.add_admin(admin_id, None, None):
+            await update.message.reply_text(
+                f"✅ ادمین اضافه شد:\n\n"
+                f"🔢 User ID: `{admin_id}`\n\n"
+                f"⚠️ اطلاعات کاربر قابل دسترسی نیست.\n"
+                f"کاربر باید حداقل یکبار ربات را /start کند.",
+                parse_mode='Markdown',
+                reply_markup=admin_panel_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ این کاربر قبلاً ادمین است!",
+                reply_markup=admin_panel_keyboard()
+            )
     
     return ConversationHandler.END
 
 
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """نمایش لیست ادمین‌ها"""
+    """نمایش لیست ادمین‌ها - فقط برای SUPER_ADMIN"""
     user_id = update.effective_user.id
     
-    if not await is_admin(user_id):
+    # 🔥 فقط SUPER_ADMIN می‌تونه لیست ادمین‌ها رو ببینه
+    if not is_super_admin(user_id):
         await update.message.reply_text(
-            "❌ شما دسترسی به این بخش ندارید!",
+            "❌ شما دسترسی به این بخش ندارید!\n"
+            "فقط SUPER ADMIN می‌تواند لیست ادمین‌ها را مشاهده کند.",
             reply_markup=main_menu_keyboard()
         )
         return
@@ -186,13 +206,24 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = "📜 لیست ادمین‌ها:\n\n"
     
-    for idx, (user_id_db, username, first_name, added_date) in enumerate(admins, 1):
+    for idx, admin_data in enumerate(admins, 1):
+        # 🔥 چک کردن تعداد عناصر tuple
+        if len(admin_data) == 4:
+            user_id_db, username, first_name, added_date = admin_data
+        else:
+            # اگه فرمت متفاوت بود
+            user_id_db = admin_data[0]
+            username = admin_data[1] if len(admin_data) > 1 else None
+            first_name = admin_data[2] if len(admin_data) > 2 else None
+            added_date = admin_data[3] if len(admin_data) > 3 else "نامشخص"
+        
         name = first_name if first_name else "بدون نام"
         user_tag = f"@{username}" if username else "بدون یوزرنیم"
+        date_str = added_date[:10] if added_date and len(added_date) >= 10 else "نامشخص"
         
         text += f"{idx}. **{name}** ({user_tag})\n"
         text += f"   🔢 User ID: `{user_id_db}`\n"
-        text += f"   📅 تاریخ: {added_date[:10]}\n\n"
+        text += f"   📅 تاریخ: {date_str}\n\n"
     
     await update.message.reply_text(
         text,
@@ -202,12 +233,14 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """شروع حذف ادمین"""
+    """شروع حذف ادمین - فقط برای SUPER_ADMIN"""
     user_id = update.effective_user.id
     
-    if not await is_admin(user_id):
+    # 🔥 فقط SUPER_ADMIN می‌تونه ادمین حذف کنه
+    if not is_super_admin(user_id):
         await update.message.reply_text(
-            "❌ شما دسترسی به این بخش ندارید!",
+            "❌ شما دسترسی به این بخش ندارید!\n"
+            "فقط SUPER ADMIN می‌تواند ادمین حذف کند.",
             reply_markup=main_menu_keyboard()
         )
         return ConversationHandler.END
@@ -232,7 +265,15 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = "➖ حذف ادمین:\n\n"
     text += "📋 لیست ادمین‌ها:\n\n"
     
-    for idx, (user_id_db, username, first_name, added_date) in enumerate(admins, 1):
+    for idx, admin_data in enumerate(admins, 1):
+        # 🔥 چک کردن تعداد عناصر tuple
+        if len(admin_data) == 4:
+            user_id_db, username, first_name, added_date = admin_data
+        else:
+            user_id_db = admin_data[0]
+            username = admin_data[1] if len(admin_data) > 1 else None
+            first_name = admin_data[2] if len(admin_data) > 2 else None
+        
         name = first_name if first_name else "بدون نام"
         user_tag = f"@{username}" if username else "بدون یوزرنیم"
         text += f"{idx}. {name} ({user_tag})\n"
