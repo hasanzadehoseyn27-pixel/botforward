@@ -1,9 +1,20 @@
 # app/database.py
 import sqlite3
+import os
 
 class Database:
-    def __init__(self, db_name="bot_data.db"):
+    def __init__(self, db_name=None):
+        # تعیین مسیر دیتابیس
+        if db_name is None:
+            # در محیط production (Liara) از /tmp استفاده کن
+            if os.path.exists('/tmp'):
+                db_name = "/tmp/bot_data.db"
+            else:
+                # در محیط local
+                db_name = "bot_data.db"
+        
         self.db_name = db_name
+        print(f"📂 مسیر دیتابیس: {self.db_name}")
         self.init_db()
     
     def init_db(self):
@@ -44,7 +55,7 @@ class Database:
             )
         ''')
         
-        # جدول ادمین‌ها (جدید)
+        # جدول ادمین‌ها
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS admins (
                 user_id TEXT PRIMARY KEY,
@@ -64,6 +75,7 @@ class Database:
         
         conn.commit()
         conn.close()
+        print("✅ دیتابیس آماده شد!")
     
     # ==================== توابع مبدا ====================
     
@@ -208,7 +220,7 @@ class Database:
         conn.close()
         return interval, interval_type
     
-    # ==================== توابع ادمین (جدید) ====================
+    # ==================== توابع ادمین ====================
     
     def add_admin(self, user_id, username=None, first_name=None):
         """افزودن ادمین"""
