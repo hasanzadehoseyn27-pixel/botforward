@@ -10,11 +10,23 @@ from app.handlers.destinations import destinations_handlers
 from app.handlers.posts import posts_handlers
 from app.handlers.intervals import intervals_handlers
 from app.handlers.forwarding import forwarding_handlers, channel_post_handler
+from app.handlers.admin import admin_handlers  # جدید
 
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """بازگشت به منوی اصلی"""
     from app.keyboards.keyboards import main_menu_keyboard
+    from app.database import Database
+    
+    db = Database()
+    user_id = update.effective_user.id
+    
+    # بررسی ادمین بودن
+    if not db.is_admin(user_id):
+        await update.message.reply_text(
+            "❌ شما دسترسی به ربات ندارید!",
+        )
+        return
     
     await update.message.reply_text(
         "منوی اصلی:\n"
@@ -41,6 +53,10 @@ def main():
         
         # Handler بازگشت به منوی اصلی (با دکمه Reply Keyboard)
         application.add_handler(MessageHandler(filters.Regex("^🔙 بازگشت$"), back_to_main))
+        
+        # Handler های پنل مدیریت (جدید)
+        for handler in admin_handlers():
+            application.add_handler(handler)
         
         # Handler های مبدا
         for handler in sources_handlers():

@@ -11,9 +11,29 @@ def main_menu_keyboard(is_forwarding=False):
         [
             KeyboardButton("📋 لیست پست‌ها"),
             KeyboardButton("⏰ حالت ارسال")
+        ],
+        [
+            KeyboardButton("👑 پنل مدیریت")
         ]
     ]
     
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+def admin_panel_keyboard():
+    """منوی پنل مدیریت"""
+    keyboard = [
+        [
+            KeyboardButton("➕ افزودن ادمین"),
+            KeyboardButton("📜 لیست ادمین‌ها")
+        ],
+        [
+            KeyboardButton("➖ حذف ادمین"),
+            KeyboardButton("📊 آمار ربات")
+        ],
+        [
+            KeyboardButton("🔙 بازگشت")
+        ]
+    ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def source_menu_keyboard():
