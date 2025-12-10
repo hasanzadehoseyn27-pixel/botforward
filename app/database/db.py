@@ -1,275 +1,229 @@
-# app/database.py
+# app/database/db.py
 import sqlite3
 import os
 
+
 class Database:
-    def __init__(self, db_name=None):
-        # تعیین مسیر دیتابیس
-        if db_name is None:
-            # در محیط production (Liara) از /tmp استفاده کن
-            if os.path.exists('/tmp'):
-                db_name = "/tmp/bot_data.db"
-            else:
-                # در محیط local
-                db_name = "bot_data.db"
+    def __init__(self, db_name='bot.db'):
+        """اتصال به دیتابیس"""
+        # ایجاد مسیر کامل برای دیتابیس
+        db_path = os.path.join(os.getcwd(), db_name)
         
-        self.db_name = db_name
-        print(f"📂 مسیر دیتابیس: {self.db_name}")
-        self.init_db()
+        # مطمئن شویم که پوشه وجود دارد
+        db_dir = os.path.dirname(db_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
+        
+        print(f"📁 مسیر دیتابیس: {db_path}")
+        
+        try:
+            self.conn = sqlite3.connect(db_path, check_same_thread=False)
+            self.cursor = self.conn.cursor()
+            self._create_tables()
+            print("✅ دیتابیس با موفقیت متصل شد!")
+        except Exception as e:
+            print(f"❌ خطا در اتصال به دیتابیس: {e}")
+            # اگر مسیر مشکل دارد، از /tmp استفاده کن
+            db_path = f"/tmp/{db_name}"
+            print(f"📁 تلاش برای استفاده از: {db_path}")
+            self.conn = sqlite3.connect(db_path, check_same_thread=False)
+            self.cursor = self.conn.cursor()
+            self._create_tables()
+            print("✅ دیتابیس در /tmp ساخته شد!")
     
-    def init_db(self):
-        """ایجاد جداول دیتابیس"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
+    def _create_tables(self):
+        """ساخت جداول دیتابیس"""
         
-        # جدول مبداها
-        cursor.execute('''
+        # جدول مبداها (Sources)
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS sources (
-                chat_id TEXT PRIMARY KEY
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT UNIQUE NOT NULL
             )
         ''')
         
-        # جدول مقاصد
-        cursor.execute('''
+        # جدول مقاصد (Destinations)
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS destinations (
-                chat_id TEXT PRIMARY KEY
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT UNIQUE NOT NULL
             )
         ''')
         
-        # جدول پست‌ها
-        cursor.execute('''
+        # جدول پست‌ها (Posts)
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS posts (
-                ad_number TEXT PRIMARY KEY,
-                source_chat_id TEXT,
-                message_id INTEGER,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad_number TEXT UNIQUE NOT NULL,
+                source_chat_id TEXT NOT NULL,
+                message_id INTEGER NOT NULL,
                 message_link TEXT,
-                is_active INTEGER DEFAULT 1
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # جدول تنظیمات
-        cursor.execute('''
+        # جدول تنظیمات (Settings)
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
             )
         ''')
         
-        # جدول ادمین‌ها
-        cursor.execute('''
+        # جدول ادمین‌ها (Admins)
+        self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS admins (
                 user_id TEXT PRIMARY KEY,
                 username TEXT,
                 first_name TEXT,
-                added_date TEXT DEFAULT CURRENT_TIMESTAMP
+                added_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
-        # تنظیم مقدار پیش‌فرض برای زمان فوروارد
-        cursor.execute('''
-            INSERT OR IGNORE INTO settings (key, value) VALUES ('forward_interval', '10')
+        # مقداردهی اولیه تنظیمات
+        self.cursor.execute('''
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('forward_interval', '5')
         ''')
-        cursor.execute('''
+        self.cursor.execute('''
             INSERT OR IGNORE INTO settings (key, value) VALUES ('interval_type', 'second')
         ''')
         
-        conn.commit()
-        conn.close()
-        print("✅ دیتابیس آماده شد!")
+        self.conn.commit()
     
-    # ==================== توابع مبدا ====================
-    
+    # ========== مدیریت مبداها ==========
     def add_source(self, chat_id):
         """افزودن مبدا"""
         try:
-            conn = sqlite3.connect(self.db_name)
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO sources (chat_id) VALUES (?)', (chat_id,))
-            conn.commit()
-            conn.close()
+            self.cursor.execute('INSERT INTO sources (chat_id) VALUES (?)', (chat_id,))
+            self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
     
     def remove_source(self, chat_id):
         """حذف مبدا"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM sources WHERE chat_id = ?', (chat_id,))
-        affected = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return affected > 0
+        self.cursor.execute('DELETE FROM sources WHERE chat_id = ?', (chat_id,))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
     
     def get_sources(self):
         """دریافت لیست مبداها"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT chat_id FROM sources')
-        sources = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return sources
+        self.cursor.execute('SELECT chat_id FROM sources')
+        return [row[0] for row in self.cursor.fetchall()]
     
-    # ==================== توابع مقصد ====================
-    
+    # ========== مدیریت مقاصد ==========
     def add_destination(self, chat_id):
         """افزودن مقصد"""
         try:
-            conn = sqlite3.connect(self.db_name)
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO destinations (chat_id) VALUES (?)', (chat_id,))
-            conn.commit()
-            conn.close()
+            self.cursor.execute('INSERT INTO destinations (chat_id) VALUES (?)', (chat_id,))
+            self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
     
     def remove_destination(self, chat_id):
         """حذف مقصد"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM destinations WHERE chat_id = ?', (chat_id,))
-        affected = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return affected > 0
+        self.cursor.execute('DELETE FROM destinations WHERE chat_id = ?', (chat_id,))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
     
     def get_destinations(self):
         """دریافت لیست مقاصد"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT chat_id FROM destinations')
-        destinations = [row[0] for row in cursor.fetchall()]
-        conn.close()
-        return destinations
+        self.cursor.execute('SELECT chat_id FROM destinations')
+        return [row[0] for row in self.cursor.fetchall()]
     
-    # ==================== توابع پست ====================
-    
+    # ========== مدیریت پست‌ها ==========
     def add_post(self, ad_number, source_chat_id, message_id, message_link):
-        """افزودن پست"""
+        """افزودن پست جدید"""
         try:
-            conn = sqlite3.connect(self.db_name)
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO posts (ad_number, source_chat_id, message_id, message_link, is_active)
-                VALUES (?, ?, ?, ?, 1)
+            self.cursor.execute('''
+                INSERT INTO posts (ad_number, source_chat_id, message_id, message_link)
+                VALUES (?, ?, ?, ?)
             ''', (ad_number, source_chat_id, message_id, message_link))
-            conn.commit()
-            conn.close()
+            self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
     
+    def toggle_post(self, ad_number):
+        """تغییر وضعیت فعال/غیرفعال پست"""
+        self.cursor.execute('SELECT is_active FROM posts WHERE ad_number = ?', (ad_number,))
+        result = self.cursor.fetchone()
+        if result:
+            new_status = 0 if result[0] == 1 else 1
+            self.cursor.execute('UPDATE posts SET is_active = ? WHERE ad_number = ?', (new_status, ad_number))
+            self.conn.commit()
+            return new_status
+        return None
+    
     def get_active_posts(self):
         """دریافت پست‌های فعال"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('''
+        self.cursor.execute('''
             SELECT ad_number, message_link, source_chat_id, message_id 
             FROM posts WHERE is_active = 1
         ''')
-        posts = cursor.fetchall()
-        conn.close()
-        return posts
+        return self.cursor.fetchall()
     
     def get_inactive_posts(self):
         """دریافت پست‌های غیرفعال"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT ad_number, message_link FROM posts WHERE is_active = 0')
-        posts = cursor.fetchall()
-        conn.close()
-        return posts
+        self.cursor.execute('''
+            SELECT ad_number, message_link 
+            FROM posts WHERE is_active = 0
+        ''')
+        return self.cursor.fetchall()
     
-    def toggle_post(self, ad_number):
-        """تغییر وضعیت پست"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT is_active FROM posts WHERE ad_number = ?', (ad_number,))
-        result = cursor.fetchone()
-        
-        if result:
-            new_status = 0 if result[0] == 1 else 1
-            cursor.execute('UPDATE posts SET is_active = ? WHERE ad_number = ?', (new_status, ad_number))
-            conn.commit()
-            conn.close()
-            return new_status
-        
-        conn.close()
-        return None
-    
-    # ==================== توابع تنظیمات ====================
-    
-    def set_forward_interval(self, interval, interval_type):
+    # ========== مدیریت تنظیمات ==========
+    def set_forward_interval(self, value, interval_type):
         """تنظیم زمان فوروارد"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('UPDATE settings SET value = ? WHERE key = "forward_interval"', (str(interval),))
-        cursor.execute('UPDATE settings SET value = ? WHERE key = "interval_type"', (interval_type,))
-        conn.commit()
-        conn.close()
+        self.cursor.execute('UPDATE settings SET value = ? WHERE key = ?', (str(value), 'forward_interval'))
+        self.cursor.execute('UPDATE settings SET value = ? WHERE key = ?', (interval_type, 'interval_type'))
+        self.conn.commit()
     
     def get_forward_interval(self):
         """دریافت زمان فوروارد"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT value FROM settings WHERE key = "forward_interval"')
-        interval = int(cursor.fetchone()[0])
-        cursor.execute('SELECT value FROM settings WHERE key = "interval_type"')
-        interval_type = cursor.fetchone()[0]
-        conn.close()
-        return interval, interval_type
+        self.cursor.execute('SELECT value FROM settings WHERE key = ?', ('forward_interval',))
+        interval = self.cursor.fetchone()[0]
+        self.cursor.execute('SELECT value FROM settings WHERE key = ?', ('interval_type',))
+        interval_type = self.cursor.fetchone()[0]
+        return int(interval), interval_type
     
-    # ==================== توابع ادمین ====================
-    
+    # ========== مدیریت ادمین‌ها ==========
     def add_admin(self, user_id, username=None, first_name=None):
         """افزودن ادمین"""
         try:
-            conn = sqlite3.connect(self.db_name)
-            cursor = conn.cursor()
-            cursor.execute('''
+            self.cursor.execute('''
                 INSERT INTO admins (user_id, username, first_name)
                 VALUES (?, ?, ?)
             ''', (str(user_id), username, first_name))
-            conn.commit()
-            conn.close()
+            self.conn.commit()
             return True
         except sqlite3.IntegrityError:
             return False
     
     def remove_admin(self, user_id):
         """حذف ادمین"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM admins WHERE user_id = ?', (str(user_id),))
-        affected = cursor.rowcount
-        conn.commit()
-        conn.close()
-        return affected > 0
+        self.cursor.execute('DELETE FROM admins WHERE user_id = ?', (str(user_id),))
+        self.conn.commit()
+        return self.cursor.rowcount > 0
     
     def get_admins(self):
         """دریافت لیست ادمین‌ها"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT user_id, username, first_name, added_date FROM admins')
-        admins = cursor.fetchall()
-        conn.close()
-        return admins
+        self.cursor.execute('SELECT user_id, username, first_name, added_date FROM admins')
+        return self.cursor.fetchall()
     
     def is_admin(self, user_id):
         """بررسی ادمین بودن کاربر"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT user_id FROM admins WHERE user_id = ?', (str(user_id),))
-        result = cursor.fetchone()
-        conn.close()
+        self.cursor.execute('SELECT user_id FROM admins WHERE user_id = ?', (str(user_id),))
+        result = self.cursor.fetchone()
         return result is not None
     
     def get_admin_count(self):
         """تعداد ادمین‌ها"""
-        conn = sqlite3.connect(self.db_name)
-        cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM admins')
-        count = cursor.fetchone()[0]
-        conn.close()
+        self.cursor.execute('SELECT COUNT(*) FROM admins')
+        count = self.cursor.fetchone()[0]
         return count
+    
+    def close(self):
+        """بستن اتصال دیتابیس"""
+        self.conn.close()
