@@ -1,27 +1,88 @@
 # app/handlers/admin.py
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ConversationHandler,
     MessageHandler,
     CommandHandler,
     ContextTypes,
+    CallbackQueryHandler,
     filters
 )
 from app.keyboards.keyboards import admin_panel_keyboard, cancel_keyboard, main_menu_keyboard
 from app.database import Database
+from config import SUPER_ADMIN_ID  # ✅ اضافه شد
+
 
 db = Database()
+
 
 # States
 WAITING_ADMIN_ID = 0
 WAITING_ADMIN_REMOVE = 1
+
+
+async def is_admin(user_id: int) -> bool:
+    """بررسی ادمین بودن کاربر"""
+    # 🔥 اول چک کن که SUPER_ADMIN هست یا نه
+    if str(user_id) == str(SUPER_ADMIN_ID):
+        # اگر تو دیتابیس نیست، اضافه‌اش کن
+        if not db.is_admin(str(user_id)):
+            db.add_admin(str(user_id), username="SUPER_ADMIN", first_name="Super Admin")
+            print(f"✅ SUPER_ADMIN {user_id} به دیتابیس اضافه شد!")
+        return True
+    
+    # بقیه چک کن
+    return db.is_admin(str(user_id))
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """دستور /start"""
+    user = update.effective_user
+    user_id = user.id
+    
+    # بررسی ادمین بودن
+    if not await is_admin(user_id):
+        await update.message.reply_text(
+            f"❌ دسترسی غیرمجاز!\n\n"
+            f"👋 سلام {user.first_name}!\n"
+            f"شما به این ربات دسترسی ندارید.\n\n"
+            f"🆔 User ID شما: `{user_id}`\n\n"
+            f"برای دریافت دسترسی، این User ID را به ادمین ربات بدهید.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # منوی اصلی ادمین
+    keyboard = [
+        [
+            InlineKeyboardButton("📥 مبدا", callback_data="source_menu"),
+            InlineKeyboardButton("📤 مقصد", callback_data="destination_menu")
+        ],
+        [
+            InlineKeyboardButton("📋 پست‌ها", callback_data="posts_menu"),
+            InlineKeyboardButton("⚙️ تنظیمات", callback_data="settings_menu")
+        ],
+        [
+            InlineKeyboardButton("👥 ادمین‌ها", callback_data="admin_menu")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        f"👋 سلام {user.first_name}!\n"
+        f"به پنل مدیریت ربات خوش آمدید.\n\n"
+        f"🆔 User ID شما: `{user_id}`",
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """پنل مدیریت"""
     user_id = update.effective_user.id
     
     # بررسی ادمین بودن
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await update.message.reply_text(
             "❌ شما دسترسی به پنل مدیریت ندارید!",
             reply_markup=main_menu_keyboard()
@@ -34,11 +95,12 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_panel_keyboard()
     )
 
+
 async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع افزودن ادمین"""
     user_id = update.effective_user.id
     
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await update.message.reply_text(
             "❌ شما دسترسی به این بخش ندارید!",
             reply_markup=main_menu_keyboard()
@@ -54,6 +116,7 @@ async def add_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=cancel_keyboard()
     )
     return WAITING_ADMIN_ID
+
 
 async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت User ID ادمین"""
@@ -99,11 +162,12 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
+
 async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش لیست ادمین‌ها"""
     user_id = update.effective_user.id
     
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await update.message.reply_text(
             "❌ شما دسترسی به این بخش ندارید!",
             reply_markup=main_menu_keyboard()
@@ -136,11 +200,12 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_panel_keyboard()
     )
 
+
 async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """شروع حذف ادمین"""
     user_id = update.effective_user.id
     
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await update.message.reply_text(
             "❌ شما دسترسی به این بخش ندارید!",
             reply_markup=main_menu_keyboard()
@@ -182,6 +247,7 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
     return WAITING_ADMIN_REMOVE
 
+
 async def receive_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """دریافت User ID ادمین برای حذف"""
     admin_id = update.message.text.strip()
@@ -211,11 +277,12 @@ async def receive_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYP
     
     return ConversationHandler.END
 
+
 async def bot_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نمایش آمار ربات"""
     user_id = update.effective_user.id
     
-    if not db.is_admin(user_id):
+    if not await is_admin(user_id):
         await update.message.reply_text(
             "❌ شما دسترسی به این بخش ندارید!",
             reply_markup=main_menu_keyboard()
@@ -249,6 +316,7 @@ async def bot_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=admin_panel_keyboard()
     )
 
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """لغو عملیات"""
     await update.message.reply_text(
@@ -257,8 +325,12 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
+
 def admin_handlers():
     """بازگشت لیست handler های پنل مدیریت"""
+    # Handler برای دستور /start
+    start_handler = CommandHandler("start", start)
+    
     # Handler برای منوی پنل
     admin_panel_handler = MessageHandler(filters.Regex("^👑 پنل مدیریت$"), admin_panel)
     list_admins_handler = MessageHandler(filters.Regex("^📜 لیست ادمین‌ها$"), list_admins)
@@ -294,4 +366,4 @@ def admin_handlers():
         per_user=True
     )
     
-    return [admin_panel_handler, list_admins_handler, bot_stats_handler, add_admin_conv, remove_admin_conv]
+    return [start_handler, admin_panel_handler, list_admins_handler, bot_stats_handler, add_admin_conv, remove_admin_conv]
