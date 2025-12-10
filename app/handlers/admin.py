@@ -51,9 +51,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"❌ دسترسی غیرمجاز!\n\n"
             f"👋 سلام {user.first_name}!\n"
             f"شما به این ربات دسترسی ندارید.\n\n"
-            f"🆔 User ID شما: `{user_id}`\n\n"
+            f"🆔 User ID شما: <code>{user_id}</code>\n\n"
             f"برای دریافت دسترسی، این User ID را به ادمین ربات بدهید.",
-            parse_mode='Markdown'
+            parse_mode='HTML'
         )
         return
     
@@ -76,9 +76,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"👋 سلام {user.first_name}!\n"
         f"به پنل مدیریت ربات خوش آمدید.\n\n"
-        f"🆔 User ID شما: `{user_id}`",
+        f"🆔 User ID شما: <code>{user_id}</code>",
         reply_markup=reply_markup,
-        parse_mode='Markdown'
+        parse_mode='HTML'
     )
 
 
@@ -152,8 +152,8 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ ادمین با موفقیت اضافه شد:\n\n"
                 f"👤 نام: {name}\n"
                 f"🆔 یوزرنیم: {user_tag}\n"
-                f"🔢 User ID: `{admin_id}`",
-                parse_mode='Markdown',
+                f"🔢 User ID: <code>{admin_id}</code>",
+                parse_mode='HTML',
                 reply_markup=admin_panel_keyboard()
             )
         else:
@@ -166,10 +166,10 @@ async def receive_admin_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if db.add_admin(admin_id, None, None):
             await update.message.reply_text(
                 f"✅ ادمین اضافه شد:\n\n"
-                f"🔢 User ID: `{admin_id}`\n\n"
+                f"🔢 User ID: <code>{admin_id}</code>\n\n"
                 f"⚠️ اطلاعات کاربر قابل دسترسی نیست.\n"
                 f"کاربر باید حداقل یکبار ربات را /start کند.",
-                parse_mode='Markdown',
+                parse_mode='HTML',
                 reply_markup=admin_panel_keyboard()
             )
         else:
@@ -221,13 +221,14 @@ async def list_admins(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_tag = f"@{username}" if username else "بدون یوزرنیم"
         date_str = added_date[:10] if added_date and len(added_date) >= 10 else "نامشخص"
         
-        text += f"{idx}. **{name}** ({user_tag})\n"
-        text += f"   🔢 User ID: `{user_id_db}`\n"
+        # 🔥 استفاده از HTML به جای Markdown برای جلوگیری از خطا
+        text += f"{idx}. <b>{name}</b> ({user_tag})\n"
+        text += f"   🔢 User ID: <code>{user_id_db}</code>\n"
         text += f"   📅 تاریخ: {date_str}\n\n"
     
     await update.message.reply_text(
         text,
-        parse_mode='Markdown',
+        parse_mode='HTML',  # 🔥 تغییر از Markdown به HTML
         reply_markup=admin_panel_keyboard()
     )
 
@@ -276,14 +277,16 @@ async def remove_admin_start(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         name = first_name if first_name else "بدون نام"
         user_tag = f"@{username}" if username else "بدون یوزرنیم"
+        
+        # 🔥 استفاده از HTML به جای Markdown
         text += f"{idx}. {name} ({user_tag})\n"
-        text += f"   🔢 `{user_id_db}`\n\n"
+        text += f"   🔢 <code>{user_id_db}</code>\n\n"
     
     text += "💬 User ID ادمینی که می‌خواهید حذف کنید را ارسال کنید:"
     
     await update.message.reply_text(
         text,
-        parse_mode='Markdown',
+        parse_mode='HTML',  # 🔥 تغییر از Markdown به HTML
         reply_markup=cancel_keyboard()
     )
     return WAITING_ADMIN_REMOVE
@@ -304,15 +307,15 @@ async def receive_admin_remove(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if db.remove_admin(admin_id):
         await update.message.reply_text(
-            f"✅ ادمین با User ID زیر حذف شد:\n`{admin_id}`",
-            parse_mode='Markdown',
+            f"✅ ادمین با User ID زیر حذف شد:\n<code>{admin_id}</code>",
+            parse_mode='HTML',
             reply_markup=admin_panel_keyboard()
         )
     else:
         await update.message.reply_text(
             f"❌ این User ID در لیست ادمین‌ها یافت نشد!\n\n"
-            f"User ID وارد شده: `{admin_id}`",
-            parse_mode='Markdown',
+            f"User ID وارد شده: <code>{admin_id}</code>",
+            parse_mode='HTML',
             reply_markup=admin_panel_keyboard()
         )
     
