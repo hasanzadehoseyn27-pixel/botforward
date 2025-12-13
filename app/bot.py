@@ -3,6 +3,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, ContextTypes, filters
 from config import BOT_TOKEN
 
+
 # Import handlers با مسیر کامل
 from app.handlers.start import start_handler
 from app.handlers.sources import sources_handlers
@@ -10,7 +11,7 @@ from app.handlers.destinations import destinations_handlers
 from app.handlers.posts import posts_handlers
 from app.handlers.intervals import intervals_handlers
 from app.handlers.forwarding import forwarding_handlers, channel_post_handler
-from app.handlers.admin import admin_handlers  # جدید
+from app.handlers.admin import admin_handlers
 
 
 async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -28,10 +29,11 @@ async def back_to_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # 🔥 پاس دادن user_id به main_menu_keyboard تا دکمه پنل مدیریت نمایش داده بشه
     await update.message.reply_text(
-        "منوی اصلی:\n"
+        "🏠 منوی اصلی:\n"
         "گزینه مورد نظر را انتخاب کنید:",
-        reply_markup=main_menu_keyboard()
+        reply_markup=main_menu_keyboard(user_id=user_id)
     )
 
 
@@ -51,10 +53,10 @@ def main():
         # دستور start
         application.add_handler(start_handler)
         
-        # Handler بازگشت به منوی اصلی (با دکمه Reply Keyboard)
+        # 🔥 Handler بازگشت به منوی اصلی (با دکمه Reply Keyboard)
         application.add_handler(MessageHandler(filters.Regex("^🔙 بازگشت$"), back_to_main))
         
-        # Handler های پنل مدیریت (جدید)
+        # Handler های پنل مدیریت
         for handler in admin_handlers():
             application.add_handler(handler)
         
